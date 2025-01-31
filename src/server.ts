@@ -12,7 +12,7 @@ import fp from "fastify-plugin";
 import closeWithGrace from "close-with-grace";
 
 // Import your application as a normal plugin.
-import serviceApp from "./app.js";
+import serviceApp from "@/app";
 
 /**
  * Do not use NODE_ENV to determine what logger (or any env related feature) to use

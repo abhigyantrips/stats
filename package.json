@@ -7,28 +7,38 @@
     "url": "git+https://github.com/abhigyantrips/stats.git"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Abhigyan Trips <contact@abhigyantrips.dev>",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/abhigyantrips/stats/issues"
   },
   "homepage": "https://github.com/abhigyantrips/stats#readme",
   "description": "",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "start": "node index.js"
+    "start": "npm run build && fastify start -l info dist/app.js",
+    "build": "tsc",
+    "watch": "tsc -w",
+    "dev": "npm run build && concurrently -k -p \"[{name}]\" -n \"TypeScript,App\" -c \"yellow.bold,cyan.bold\" \"npm:watch\" \"npm:dev:start\"",
+    "dev:start": "npm run build && fastify start --ignore-watch=.ts$ -w -l info -P dist/app.js",
+    "test": "npm run db:seed && c8 npm run test:run",
+    "test:run": "glob -c \"tsx --test\" \"./test/**/*.ts\"",
+    "standalone": "npm run build && node --env-file=.env dist/server.js"
   },
   "dependencies": {
     "@fastify/autoload": "^6.0.3",
     "@fastify/env": "^5.0.2",
     "@fastify/rate-limit": "^10.2.2",
     "@fastify/sensible": "^6.0.2",
-    "close-with-grace": "^2.2.0",
-    "fastify": "^5.2.1"
+    "concurrently": "^9.1.2",
+    "fastify": "^5.2.1",
+    "fastify-cli": "^7.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.10",
     "fastify-tsconfig": "^3.0.0",
+    "glob": "^11.0.1",
+    "prettier": "^3.4.2",
+    "prettier-plugin-sort-imports": "^1.8.6",
     "typescript": "^5.7.3"
   }
 }
