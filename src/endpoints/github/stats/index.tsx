@@ -3,29 +3,28 @@ import { Context, Hono } from "hono";
 
 import { GitHubStats } from "@/templates/svg/github-stats";
 import { ErrorSVG } from "@/components/error-svg";
+import { getTheme } from "@/themes";
 
 type Bindings = {
   GITHUB_PAT: string;
+  GITHUB_USERNAME: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-app.get("/:username", async (context: Context) => {
-  if (!context.env.GITHUB_PAT) {
+app.get("/", async (context: Context) => {
+  if (!context.env.GITHUB_PAT || !context.env.GITHUB_USERNAME) {
     return context.newResponse(
-      renderToString(<ErrorSVG message="`GITHUB_PAT` not found." />),
+      renderToString(<ErrorSVG message="GitHub Variables not found." />),
     );
   }
 
-  if (!context.req.param("username")) {
-    return context.newResponse(
-      renderToString(<ErrorSVG message="`username` not found." />),
-    );
-  }
+  const { theme } = context.req.query();
+  const myTheme = getTheme(theme);
 
   try {
     const response = await fetch(
-      `https://api.github.com/users/${context.req.param("username")}`,
+      `https://api.github.com/users/${context.env.GITHUB_USERNAME}`,
       {
         headers: {
           Authorization: `token ${context.env.GITHUB_PAT}`,
@@ -55,6 +54,7 @@ app.get("/:username", async (context: Context) => {
           username={login}
           repos={public_repos}
           followers={followers}
+          theme={myTheme}
         />,
       ),
       {

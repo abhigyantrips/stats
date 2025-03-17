@@ -4,6 +4,7 @@ import { Hono } from "hono";
 
 type Bindings = {
   GITHUB_PAT: string;
+  GITHUB_USERNAME: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
