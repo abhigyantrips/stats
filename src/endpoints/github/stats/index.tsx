@@ -1,8 +1,8 @@
+import { graphql, type GraphQlQueryResponseData } from "@octokit/graphql";
+import { GitHubStats } from "@/templates/github/stats";
 import { renderToString } from "hono/jsx/dom/server";
-import { Context, Hono } from "hono";
-
-import { GitHubStats } from "@/templates/svg/github-stats";
 import { ErrorSVG } from "@/components/error-svg";
+import { Context, Hono } from "hono";
 import { getTheme } from "@/themes";
 
 type Bindings = {
@@ -23,37 +23,30 @@ app.get("/", async (context: Context) => {
   const myTheme = getTheme(theme);
 
   try {
-    const response = await fetch(
-      `https://api.github.com/users/${context.env.GITHUB_USERNAME}`,
-      {
-        headers: {
-          Authorization: `token ${context.env.GITHUB_PAT}`,
-          "User-Agent": "Cloudflare-Worker",
-        },
+    const { user }: GraphQlQueryResponseData = await graphql({
+      headers: {
+        authorization: `token ${context.env.GITHUB_PAT}`,
       },
-    );
-
-    if (!response.ok) {
-      return context.newResponse(
-        renderToString(
-          <ErrorSVG message={`GitHub API error: ${response.status}`} />,
-        ),
-      );
-    }
-
-    const userData = await response.json();
-    const { login, public_repos, followers } = userData as {
-      login: string;
-      public_repos: number;
-      followers: number;
-    };
+      query: `query GitHubUser($USERNAME: String!) {
+        user(login: $USERNAME) {
+          login
+          followers {
+            totalCount
+          }
+          repositories(privacy: PUBLIC) {
+            totalCount
+          }
+        }
+      }`,
+      USERNAME: context.env.GITHUB_USERNAME,
+    });
 
     return context.newResponse(
       renderToString(
         <GitHubStats
-          username={login}
-          repos={public_repos}
-          followers={followers}
+          username={user.login}
+          repos={user.repositories.totalCount}
+          followers={user.followers.totalCount}
           theme={myTheme}
         />,
       ),

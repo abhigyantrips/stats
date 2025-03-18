@@ -5,6 +5,7 @@
     "deploy": "wrangler deploy --minify"
   },
   "dependencies": {
+    "@octokit/graphql": "^8.2.1",
     "hono": "^4.7.4"
   },
   "devDependencies": {
