@@ -5,4 +5,9 @@ export interface Theme {
   iconColor: string;
   backgroundColor: string;
   borderColor?: string;
+  graph: {
+    lineColor: string;
+    pointColor: string;
+    areaColor?: string;
+  };
 }
