@@ -22,19 +22,6 @@ app.get("/", async (context: Context) => {
   const { theme } = context.req.query();
   const myTheme = getTheme(theme);
 
-  function createGraph(
-    chartType: string,
-    config: any,
-    data: any,
-  ): Promise<string> {
-    return new Promise((resolve) => {
-      // Minimal example returning an inline SVG string.
-      resolve(
-        `<svg><!-- ${chartType} chart with ${data.series[0].value.length} points --></svg>`,
-      );
-    });
-  }
-
   try {
     const { user }: GraphQlQueryResponseData = await graphql({
       headers: {
@@ -60,29 +47,33 @@ app.get("/", async (context: Context) => {
       TO: new Date().toISOString(),
     });
 
-    const days =
+    if (!user) {
+      return context.newResponse(
+        renderToString(<ErrorSVG message="User not found on GitHub." />),
+        {
+          status: 404,
+          headers: {
+            "Content-Type": "image/svg+xml",
+            "Cache-Control": "s-maxage=3600, stale-while-revalidate",
+          },
+        },
+      );
+    }
+
+    const contributions =
       user.contributionsCollection.contributionCalendar.weeks.flatMap(
         (week: any) => week.contributionDays,
       );
 
-    const line = await createGraph(
-      "line",
-      { theme: myTheme },
-      {
-        labels: days.map((day: any) => day.date),
-        series: [{ value: days.map((day: any) => day.contributionCount) }],
-      },
-    );
-
     return context.newResponse(
       renderToString(
         <GitHubContributions
-          height={300}
           width={600}
+          height={300}
           theme={myTheme}
           title="Contributions"
           radius={8}
-          line={line}
+          contributions={contributions}
         />,
       ),
       {
@@ -93,9 +84,11 @@ app.get("/", async (context: Context) => {
       },
     );
   } catch (error: any) {
+    console.error("Error in /api/github/contributions:", error);
     return context.newResponse(
       renderToString(<ErrorSVG message={error.message} />),
       {
+        status: 500,
         headers: {
           "Content-Type": "image/svg+xml",
           "Cache-Control": "s-maxage=3600, stale-while-revalidate",

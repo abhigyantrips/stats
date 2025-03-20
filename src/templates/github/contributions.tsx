@@ -1,23 +1,48 @@
-import { Theme } from "@/types";
+import { Theme } from "@/types/theme";
 import { FC } from "hono/jsx";
 
 interface GitHubContributionsProps {
-  height: number;
   width: number;
+  height: number;
   theme: Theme;
   title: string;
   radius: number;
-  line: string;
+  contributions: { contributionCount: number; date: string }[];
 }
 
 export const GitHubContributions: FC<GitHubContributionsProps> = ({
-  height,
   width,
+  height,
   theme,
   title,
   radius,
-  line,
+  contributions,
 }) => {
+  // Calculate the center of the graph area
+  const centerX = width / 2;
+  const centerY = height / 2 + 20;
+
+  // Calculate total contributions
+  const totalContributions = contributions.reduce(
+    (sum, day) => sum + day.contributionCount,
+    0,
+  );
+
+  const chart = (
+    <g>
+      <text
+        x={centerX}
+        y={centerY}
+        fontSize="20"
+        fontWeight="bold"
+        fill={theme.titleColor}
+        textAnchor="middle"
+      >
+        Total Contributions: {totalContributions}
+      </text>
+    </g>
+  );
+
   return (
     <svg
       width={`${width}`}
@@ -35,11 +60,11 @@ export const GitHubContributions: FC<GitHubContributionsProps> = ({
         rx={`${radius}`}
         height="100%"
         stroke="#E4E2E2"
-        fill-opacity="1"
+        fillOpacity="1"
         width="100%"
-        fill={`#${theme.backgroundColor}`}
-        stroke-opacity="1"
-        style={`stroke:#${theme.borderColor}; stroke-width:1;`}
+        fill={theme.backgroundColor}
+        strokeOpacity="1"
+        style={{ stroke: theme.borderColor, strokeWidth: 1 }}
       />
 
       <style>
@@ -50,136 +75,12 @@ export const GitHubContributions: FC<GitHubContributionsProps> = ({
           .header {
             font: 600 20px 'Segoe UI', Ubuntu, Sans-Serif;
             text-align: center;
-            color: #${theme.titleColor};
+            color: ${theme.titleColor};
             margin-top: 20px;
           }
           svg {
             font: 600 18px 'Segoe UI', Ubuntu, Sans-Serif;
             user-select: none;
-          }
-          .ct-label {
-            fill: #${theme.textColor};
-            color: #${theme.textColor};
-            font-size: .75rem;
-            line-height: 1;
-          }
-
-          .ct-grid-background,
-          .ct-line {
-            fill: none;
-          }
-
-          .ct-chart-bar .ct-label,
-          .ct-chart-line .ct-label {
-            display: block;
-            display: -webkit-box;
-            display: -moz-box;
-            display: -ms-flexbox;
-            display: -webkit-flex;
-            display: flex;
-          }
-
-          .ct-label.ct-horizontal.ct-start {
-            -webkit-box-align: flex-end;
-            -webkit-align-items: flex-end;
-            -ms-flex-align: flex-end;
-            align-items: flex-end;
-            -webkit-box-pack: flex-start;
-            -webkit-justify-content: flex-start;
-            -ms-flex-pack: flex-start;
-            justify-content: flex-start;
-            text-align: left;
-            text-anchor: start;
-          }
-
-          .ct-label.ct-horizontal.ct-end {
-            -webkit-box-align: flex-start;
-            -webkit-align-items: flex-start;
-            -ms-flex-align: flex-start;
-            align-items: flex-start;
-            -webkit-box-pack: flex-start;
-            -webkit-justify-content: flex-start;
-            -ms-flex-pack: flex-start;
-            justify-content: flex-start;
-            text-align: left;
-            text-anchor: start;
-          }
-
-          .ct-label.ct-vertical.ct-start {
-            -webkit-box-align: flex-end;
-            -webkit-align-items: flex-end;
-            -ms-flex-align: flex-end;
-            align-items: flex-end;
-            -webkit-box-pack: flex-end;
-            -webkit-justify-content: flex-end;
-            -ms-flex-pack: flex-end;
-            justify-content: flex-end;
-            text-align: right;
-            text-anchor: end;
-          }
-
-          .ct-label.ct-vertical.ct-end {
-            -webkit-box-align: flex-end;
-            -webkit-align-items: flex-end;
-            -ms-flex-align: flex-end;
-            align-items: flex-end;
-            -webkit-box-pack: flex-start;
-            -webkit-justify-content: flex-start;
-            -ms-flex-pack: flex-start;
-            justify-content: flex-start;
-            text-align: left;
-            text-anchor: start;
-          }
-
-          .ct-grid {
-            stroke: #${theme.textColor};
-            stroke-width: 1px;
-            stroke-opacity: 0.3;
-            stroke-dasharray: 2px;
-          }
-
-          .ct-point {
-            stroke-width: 10px;
-            stroke-linecap: round;
-            stroke: #${theme.graph.pointColor};
-            animation: blink 1s ease-in-out forwards;
-          }
-
-          .ct-line {
-            stroke-width: 4px;
-            stroke-dasharray: 5000;
-            stroke-dashoffset: 5000;
-            stroke: #${theme.graph.lineColor};
-            animation: dash 5s ease-in-out forwards;
-          }
-
-          .ct-area {
-            stroke: none;
-            fill-opacity: 0.1;
-          }
-
-          .ct-series-a .ct-area,
-          .ct-series-a .ct-slice-pie {
-            fill: #${theme.backgroundColor};
-          }
-
-          .ct-label .ct-horizontal {
-            transform: rotate(-90deg)
-          }
-          @keyframes blink {
-            from {
-              opacity: 0;
-              transform: translateX(-20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateX(0);
-            }
-          }
-          @keyframes dash {
-            to {
-              stroke-dashoffset: 0;
-            }
           }
         `}
       </style>
@@ -189,7 +90,7 @@ export const GitHubContributions: FC<GitHubContributionsProps> = ({
           {title}
         </h1>
       </foreignObject>
-      {line}
+      {chart}
     </svg>
   );
 };
