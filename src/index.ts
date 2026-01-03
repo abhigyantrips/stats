@@ -1,4 +1,4 @@
-import contributions from "@/endpoints/github/contributions";
+import streak from "@/endpoints/github/streak";
 import stats from "@/endpoints/github/stats";
 import ping from "@/endpoints/ping";
 import { Hono } from "hono";
@@ -10,9 +10,9 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-app.route("/api/ping", ping);
-app.route("/api/github/contributions", contributions);
-app.route("/api/github/stats", stats);
+app.route("/ping", ping);
+app.route("/github/stats", stats);
+app.route("/github/streak", streak);
 
 export default {
   fetch: app.fetch,
