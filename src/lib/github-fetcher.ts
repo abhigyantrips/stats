@@ -1,3 +1,8 @@
+import {
+  activityDates,
+  type ActivityDay,
+  type ActivityRange,
+} from "./activity-graph";
 import { cachedGitHubData, type GitHubCacheOptions } from "./github-cache";
 import { calculateRank } from "./calculate-rank";
 import { StatsData } from "./stats-card";
@@ -54,6 +59,79 @@ interface GitHubGraphQLResponse {
 }
 
 const GITHUB_GRAPHQL_API = "https://api.github.com/graphql";
+
+export async function fetchGitHubActivity(
+  username: string,
+  githubToken: string,
+  range: ActivityRange,
+  cache?: GitHubCacheOptions,
+): Promise<ActivityDay[]> {
+  if (!githubToken) throw new Error("GitHub token is required");
+  const query = `
+    query activity($login: String!, $from: DateTime!, $to: DateTime!) {
+      user(login: $login) {
+        createdAt
+        contributionsCollection(from: $from, to: $to) {
+          contributionCalendar {
+            weeks { contributionDays { date contributionCount } }
+          }
+        }
+      }
+    }
+  `;
+  const dates = activityDates(range);
+  // Validate and normalize inside the cache loader so malformed data is never cached.
+  return cachedGitHubData(
+    ["activity", username, range, githubToken],
+    cache,
+    async () => {
+      const result = await makeGraphQLRequest(
+        query,
+        {
+          login: username,
+          from: `${range.from}T00:00:00Z`,
+          to: `${range.to}T23:59:59Z`,
+        },
+        githubToken,
+      );
+      const weeks =
+        result.data?.user?.contributionsCollection?.contributionCalendar?.weeks;
+      const createdAt = result.data?.user?.createdAt;
+      if (
+        !Array.isArray(weeks) ||
+        typeof createdAt !== "string" ||
+        !Number.isFinite(Date.parse(createdAt))
+      )
+        throw new Error("GitHub returned an incomplete contribution calendar");
+      const counts = new Map<string, number>();
+      for (const week of weeks) {
+        if (!Array.isArray(week?.contributionDays))
+          throw new Error(
+            "GitHub returned an incomplete contribution calendar",
+          );
+        for (const day of week.contributionDays) {
+          if (
+            !day ||
+            typeof day.date !== "string" ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(day.date) ||
+            !Number.isSafeInteger(day.contributionCount) ||
+            day.contributionCount < 0
+          )
+            throw new Error("GitHub returned an invalid contribution day");
+          counts.set(day.date, day.contributionCount);
+        }
+      }
+      // GitHub omits dates before account creation; those days have no activity.
+      return dates.map((date) => {
+        if (!counts.has(date) && date >= createdAt.slice(0, 10))
+          throw new Error(
+            "GitHub returned an incomplete contribution calendar",
+          );
+        return { date, contributionCount: counts.get(date) ?? 0 };
+      });
+    },
+  );
+}
 
 // Optimized single query that fetches all data at once
 const GRAPHQL_QUERY = `

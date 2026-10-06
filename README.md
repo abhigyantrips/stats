@@ -1,6 +1,6 @@
 # stats on workers.
 
-Self-host GitHub stats and streak SVG cards for your README on Cloudflare Workers.
+Self-host GitHub stats, streak, and activity graph SVG cards for your README on Cloudflare Workers.
 Each instance serves only its configured GitHub user. No KV, database, or Node.js
 server is required.
 
@@ -39,6 +39,7 @@ Replace `YOUR_WORKER` with the Worker URL printed during deployment:
 ```md
 ![GitHub stats](https://YOUR_WORKER.workers.dev/github/stats?show_icons=true&theme=dark)
 ![GitHub streak](https://YOUR_WORKER.workers.dev/github/streak?theme=dark)
+![GitHub activity](https://YOUR_WORKER.workers.dev/github/graph?theme=dark&area=true)
 ```
 
 No username query parameter is needed. `user` and `username` may name the
@@ -47,7 +48,7 @@ The `/ping` endpoint is a basic health check.
 
 ## Options
 
-Both cards support `theme`, `hide_border`, `card_width`, `border_radius`,
+Stats and streak cards support `theme`, `hide_border`, `card_width`, `border_radius`,
 `disable_animations`, and hexadecimal `text_color`, `icon_color`, `bg_color`,
 `border_color`, and `ring_color` overrides. Colors omit the leading `#`.
 
@@ -58,7 +59,56 @@ to add rows. The card grows to fit them.
 
 Streak supports `exclude_days=Sun,Sat`. Its current-day calculation uses UTC.
 This is a subset of the upstream projects' options, not a drop-in replacement.
-Activity/contribution graphs are planned and have no endpoint yet.
+
+### Activity graph
+
+`/github/graph` renders a daily contribution line graph. It defaults to the last
+31 calendar days, including today in UTC, using GitHub's contribution calendar
+(all contribution types, not only commits). It supports these query parameters:
+
+| Parameter            | Default                            | Description                                                               |
+| -------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
+| `days`               | `31`                               | Integer from 1 to 90; number of days to display.                          |
+| `from`               | Computed                           | Inclusive starting date, `YYYY-MM-DD`.                                    |
+| `to`                 | Today (UTC)                        | Inclusive ending date, `YYYY-MM-DD`.                                      |
+| `theme`              | `default`                          | An existing project theme (listed below).                                 |
+| `bg_color`           | Theme background                   | Background color.                                                         |
+| `border_color`       | Theme border                       | Border color.                                                             |
+| `color`              | Theme text                         | Axis and tick label color; `text_color` is an alias and takes precedence. |
+| `title_color`        | Theme title                        | Title color.                                                              |
+| `line`               | Theme graph line                   | Contribution line color.                                                  |
+| `point`              | Theme graph point                  | Daily point color.                                                        |
+| `area`               | `false`                            | Set to `true` to fill beneath the line at 20% opacity.                    |
+| `area_color`         | Line color                         | Area fill color; requires `area=true`.                                    |
+| `hide_border`        | `false`                            | Set to `true` to hide the border.                                         |
+| `hide_title`         | `false`                            | Set to `true` to hide the visible title.                                  |
+| `custom_title`       | `USERNAME's GitHub Activity Graph` | Custom title; URL-encode spaces and special characters.                   |
+| `radius`             | `4.5`                              | Border radius from 0 to 16; fractional values are allowed.                |
+| `border_radius`      | `4.5`                              | Alias for `radius`; takes precedence when both are supplied.              |
+| `height`             | `300`                              | Integer from 200 to 600, in pixels.                                       |
+| `card_width`         | `1000`                             | Integer from 300 to 2000, in pixels.                                      |
+| `grid`               | `true`                             | Set to `false` to hide the horizontal grid lines.                         |
+| `disable_animations` | `false`                            | Set to `true` to disable the title fade-in.                               |
+
+Colors are hexadecimal without `#` (3, 4, 6, or 8 digits); invalid colors fall
+back to the theme. Available themes: `default`, `dark`, `radical`, `merko`,
+`gruvbox`, `tokyonight`, `onedark`, `cobalt`, `synthwave`, `highcontrast`, and
+`dracula`. Unknown theme names fall back to `default`.
+
+When neither date is supplied, `days` counts backward from today. With only
+`to`, it counts backward from that date. With only `from`, it counts forward
+from that date, stopping at today if necessary. With both dates, the explicit
+range determines the number of points and overrides `days` (if supplied,
+`days` must still be valid). Every range is inclusive, limited to 90 days, and
+cannot extend into the future. Invalid dates, ranges, or numeric options return
+HTTP 400 before contacting GitHub.
+
+Examples:
+
+```md
+![Last 60 days](https://YOUR_WORKER.workers.dev/github/graph?days=60&theme=dracula&area=true&hide_border=true)
+![Custom range](https://YOUR_WORKER.workers.dev/github/graph?from=2026-01-01&to=2026-01-31&custom_title=January%20Activity&line=2f80ed&point=4c71f2&area=true&area_color=2f80ed&grid=false)
+```
 
 ## Counts and rank
 
@@ -81,9 +131,10 @@ Activity/contribution graphs are planned and have no endpoint yet.
 ## Caching
 
 Successful GitHub responses are cached for one hour using the Workers Cache API.
-Data cache keys include the query, user, and a SHA-256 hash incorporating the token.
-Changing card styling or excluded streak days reuses the same GitHub data;
-rotating the token selects a new cache key. API errors and incomplete results
+Data cache keys hash the query or activity date range, user, and token with SHA-256.
+Changing card styling or excluded streak days reuses the same GitHub data.
+Activity graphs cache their requested date range independently of styling.
+Rotating the token selects a new cache key. API errors and incomplete results
 are never stored. Cache failures fall back to fresh GitHub requests.
 
 The Cache API is local to each Cloudflare data center and entries can be evicted.
@@ -103,6 +154,6 @@ pnpm exec wrangler deploy --dry-run
 
 - [Anurag Hazra's GitHub README Stats](https://github.com/anuraghazra/github-readme-stats): stats design, commit-count approach, and rank calculation.
 - [DenverCoder1's GitHub Streak Stats](https://github.com/DenverCoder1/github-readme-streak-stats): streak design and behavior.
-- [GitHub README Activity Graph](https://github.com/Ashutosh00710/github-readme-activity-graph): inspiration for the planned graph.
+- [GitHub README Activity Graph](https://github.com/Ashutosh00710/github-readme-activity-graph): inspiration for the activity graph and its customization options.
 
 The rank calculation's upstream license is included in [calculate-rank.ts](src/lib/calculate-rank.ts).
