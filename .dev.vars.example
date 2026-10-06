@@ -1,0 +1,3 @@
+# GitHub personal access token. Set the real value only in .dev.vars locally
+# or with `pnpm exec wrangler secret put GITHUB_PAT` in production.
+GITHUB_PAT=

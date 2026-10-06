@@ -2,5 +2,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "stats",
   "main": "src/index.ts",
-  "compatibility_date": "2025-03-15"
+  "compatibility_date": "2025-03-15",
+  "vars": {
+    "GITHUB_USERNAME": "YOUR_GITHUB_USERNAME"
+  }
 }
