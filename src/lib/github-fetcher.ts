@@ -1,3 +1,5 @@
+import { cachedGitHubData, type GitHubCacheOptions } from "./github-cache";
+import { calculateRank } from "./calculate-rank";
 import { StatsData } from "./stats-card";
 
 interface GitHubGraphQLResponse {
@@ -29,6 +31,7 @@ interface GitHubGraphQLResponse {
         totalCount: number;
       };
       repositories: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
         totalCount: number;
         nodes: Array<{
           stargazers: {
@@ -54,7 +57,7 @@ const GITHUB_GRAPHQL_API = "https://api.github.com/graphql";
 
 // Optimized single query that fetches all data at once
 const GRAPHQL_QUERY = `
-  query userInfo($login: String!) {
+  query userInfo($login: String!, $after: String) {
     user(login: $login) {
       name
       login
@@ -88,7 +91,7 @@ const GRAPHQL_QUERY = `
         first: 100
         ownerAffiliations: OWNER
         orderBy: { direction: DESC, field: STARGAZERS }
-        isFork: false
+        after: $after
       ) {
         totalCount
         nodes {
@@ -97,140 +100,111 @@ const GRAPHQL_QUERY = `
             totalCount
           }
         }
+        pageInfo { hasNextPage endCursor }
       }
       repositoryDiscussions(first: 1) {
         totalCount
       }
-      repositoryDiscussionComments(first: 1) {
+      repositoryDiscussionComments(first: 1, onlyAnswers: true) {
         totalCount
       }
     }
   }
 `;
 
-const calculateRank = ({
-  totalRepos,
-  totalCommits,
-  contributions,
-  followers,
-  prs,
-  issues,
-  stargazers,
-}: {
-  totalRepos: number;
-  totalCommits: number;
-  contributions: number;
-  followers: number;
-  prs: number;
-  issues: number;
-  stargazers: number;
-}): { level: string; percentile: number; score: number } => {
-  const COMMITS_MEDIAN = 1000;
-  const COMMITS_WEIGHT = 2;
-  const REPOS_MEDIAN = 20;
-  const REPOS_WEIGHT = 1;
-  const ISSUES_MEDIAN = 25;
-  const ISSUES_WEIGHT = 1;
-  const STARS_MEDIAN = 50;
-  const STARS_WEIGHT = 4;
-  const PRS_MEDIAN = 50;
-  const PRS_WEIGHT = 3;
-  const FOLLOWERS_MEDIAN = 10;
-  const FOLLOWERS_WEIGHT = 1;
-  const CONTRIBUTIONS_MEDIAN = 50;
-  const CONTRIBUTIONS_WEIGHT = 1;
-
-  const TOTAL_WEIGHT =
-    COMMITS_WEIGHT +
-    REPOS_WEIGHT +
-    ISSUES_WEIGHT +
-    STARS_WEIGHT +
-    PRS_WEIGHT +
-    FOLLOWERS_WEIGHT +
-    CONTRIBUTIONS_WEIGHT;
-
-  const score =
-    (totalCommits / COMMITS_MEDIAN) * COMMITS_WEIGHT +
-    (totalRepos / REPOS_MEDIAN) * REPOS_WEIGHT +
-    (issues / ISSUES_MEDIAN) * ISSUES_WEIGHT +
-    (stargazers / STARS_MEDIAN) * STARS_WEIGHT +
-    (prs / PRS_MEDIAN) * PRS_WEIGHT +
-    (followers / FOLLOWERS_MEDIAN) * FOLLOWERS_WEIGHT +
-    (contributions / CONTRIBUTIONS_MEDIAN) * CONTRIBUTIONS_WEIGHT;
-
-  const normalizedScore = (score / TOTAL_WEIGHT) * 100;
-
-  const level = (() => {
-    if (normalizedScore >= 25) return "S+";
-    if (normalizedScore >= 22.5) return "S";
-    if (normalizedScore >= 20) return "A++";
-    if (normalizedScore >= 17.5) return "A+";
-    if (normalizedScore >= 12.5) return "A";
-    if (normalizedScore >= 10) return "B+";
-    if (normalizedScore >= 7.5) return "B";
-    if (normalizedScore >= 5) return "C+";
-    if (normalizedScore >= 2.5) return "C";
-    return "D";
-  })();
-
-  const percentile = Math.max(0, Math.min(100, 100 - normalizedScore * 2));
-
-  return {
-    level,
-    percentile: Math.round(percentile * 10) / 10,
-    score: Math.round(normalizedScore * 10) / 10,
-  };
-};
-
 async function makeGraphQLRequest(
   query: string,
   variables: Record<string, any>,
   token: string,
+  cache?: GitHubCacheOptions,
 ): Promise<any> {
-  const response = await fetch(GITHUB_GRAPHQL_API, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      "User-Agent": "GitHub-Stats-Card",
+  return cachedGitHubData(
+    ["graphql", query, variables, token],
+    cache,
+    async () => {
+      const response = await fetch(GITHUB_GRAPHQL_API, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "User-Agent": "GitHub-Stats-Card",
+        },
+        body: JSON.stringify({ query, variables }),
+      });
+
+      const result = await response.json();
+
+      // Check for GraphQL errors
+      if ((result as unknown as any).errors) {
+        const errorMessages = (result as unknown as any).errors
+          .map((e: any) => e.message)
+          .join(", ");
+        throw new Error(`GitHub GraphQL Error: ${errorMessages}`);
+      }
+
+      // Check for HTTP errors
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(
+            "Invalid GitHub token. Please check your GITHUB_PAT secret.",
+          );
+        }
+        if (response.status === 403) {
+          throw new Error(
+            "GitHub API rate limit exceeded or insufficient permissions. Make sure your fine-grained token has the correct permissions.",
+          );
+        }
+        throw new Error(
+          `GitHub API error: ${response.status} ${response.statusText}`,
+        );
+      }
+
+      if (!(result as any).data?.user) throw new Error("GitHub user not found");
+      return result;
     },
-    body: JSON.stringify({ query, variables }),
+  );
+}
+
+async function fetchAllCommits(
+  username: string,
+  token: string,
+  cache?: GitHubCacheOptions,
+): Promise<number> {
+  const url = new URL("https://api.github.com/search/commits");
+  url.searchParams.set("q", `author:${username}`);
+  url.searchParams.set("per_page", "1");
+  return cachedGitHubData(["all-commits", url.href, token], cache, async () => {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "User-Agent": "GitHub-Stats-Card",
+      },
+    });
+    if (!response.ok)
+      throw new Error(`GitHub commit search failed (${response.status})`);
+    const result = await response.json<{
+      total_count: number;
+      incomplete_results: boolean;
+    }>();
+    if (
+      result.incomplete_results ||
+      !Number.isInteger(result.total_count) ||
+      result.total_count < 0
+    ) {
+      throw new Error(
+        "GitHub commit search returned incomplete results; try again later",
+      );
+    }
+    return result.total_count;
   });
-
-  const result = await response.json();
-
-  // Check for GraphQL errors
-  if ((result as unknown as any).errors) {
-    const errorMessages = (result as unknown as any).errors
-      .map((e: any) => e.message)
-      .join(", ");
-    throw new Error(`GitHub GraphQL Error: ${errorMessages}`);
-  }
-
-  // Check for HTTP errors
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error(
-        "Invalid GitHub token. Please check your GITHUB_TOKEN environment variable.",
-      );
-    }
-    if (response.status === 403) {
-      throw new Error(
-        "GitHub API rate limit exceeded or insufficient permissions. Make sure your fine-grained token has the correct permissions.",
-      );
-    }
-    throw new Error(
-      `GitHub API error: ${response.status} ${response.statusText}`,
-    );
-  }
-
-  return result;
 }
 
 export async function fetchGitHubStats(
   username: string,
   githubToken: string,
   options: {
+    cache?: GitHubCacheOptions;
     includeAllCommits?: boolean;
     excludeRepos?: string[];
     includeReviews?: boolean;
@@ -245,8 +219,9 @@ export async function fetchGitHubStats(
     // Fetch main stats
     const result: GitHubGraphQLResponse = await makeGraphQLRequest(
       GRAPHQL_QUERY,
-      { login: username },
+      { login: username, after: null },
       githubToken,
+      options.cache,
     );
 
     if (!result.data || !result.data.user) {
@@ -255,16 +230,42 @@ export async function fetchGitHubStats(
 
     const user = result.data.user;
 
-    // Calculate total stars (excluding forks)
-    const totalStars = user.repositories.nodes.reduce(
+    // Self-hosting can page through all starred repositories, unlike the
+    // public upstream instance's rate-limit-driven first-page default.
+    let repositories = user.repositories;
+    const nodes = [...repositories.nodes];
+    while (
+      repositories.pageInfo.hasNextPage &&
+      repositories.nodes.every((repo) => repo.stargazers.totalCount > 0)
+    ) {
+      const after = repositories.pageInfo.endCursor;
+      if (!after)
+        throw new Error("GitHub repository pagination cursor is missing");
+      const page: GitHubGraphQLResponse = await makeGraphQLRequest(
+        GRAPHQL_QUERY,
+        { login: username, after },
+        githubToken,
+        options.cache,
+      );
+      if (!page.data?.user) throw new Error("GitHub user not found");
+      repositories = page.data.user.repositories;
+      if (
+        repositories.pageInfo.hasNextPage &&
+        repositories.pageInfo.endCursor === after
+      ) {
+        throw new Error("GitHub repository pagination did not advance");
+      }
+      nodes.push(...repositories.nodes);
+    }
+    const totalStars = nodes.reduce(
       (acc, repo) => acc + repo.stargazers.totalCount,
       0,
     );
 
     // Total commits
-    const totalCommits =
-      user.contributionsCollection.totalCommitContributions +
-      user.contributionsCollection.restrictedContributionsCount;
+    const totalCommits = options.includeAllCommits
+      ? await fetchAllCommits(username, githubToken, options.cache)
+      : user.contributionsCollection.totalCommitContributions;
 
     // Total issues
     const totalIssues =
@@ -288,13 +289,13 @@ export async function fetchGitHubStats(
 
     // Calculate rank
     const rank = calculateRank({
-      totalRepos: user.repositories.totalCount,
-      totalCommits,
-      contributions: contributedTo,
+      allCommits: options.includeAllCommits,
+      commits: totalCommits,
+      reviews: totalReviews,
       followers: user.followers.totalCount,
       prs: totalPRs,
       issues: totalIssues,
-      stargazers: totalStars,
+      stars: totalStars,
     });
 
     return {
@@ -348,9 +349,7 @@ export async function fetchGitHubStatsForYear(
     const contributions = result.data?.user?.contributionsCollection;
 
     return {
-      totalCommits:
-        (contributions?.totalCommitContributions || 0) +
-        (contributions?.restrictedContributionsCount || 0),
+      totalCommits: contributions?.totalCommitContributions || 0,
     };
   } catch (error) {
     console.error(`Error fetching stats for year ${year}:`, error);
@@ -400,6 +399,7 @@ export async function fetchGitHubStreakStats(
   username: string,
   githubToken: string,
   excludedDays: string[] = [],
+  cache?: GitHubCacheOptions,
 ): Promise<StreakStats> {
   if (!githubToken) {
     throw new Error("GitHub token is required");
@@ -436,6 +436,7 @@ export async function fetchGitHubStreakStats(
           to: `${currentYear}-12-31T23:59:59Z`,
         },
         githubToken,
+        cache,
       );
 
     if (!currentYearResult.data?.user) {
@@ -462,6 +463,7 @@ export async function fetchGitHubStreakStats(
             to: `${year}-12-31T23:59:59Z`,
           },
           githubToken,
+          cache,
         ),
       ),
     );
@@ -513,95 +515,6 @@ export async function fetchGitHubStreakStats(
       });
       return excludedDays.includes(day);
     };
-
-    // We need to iterate through all days from first contribution to today to handle gaps
-    const startDate = new Date(stats.firstContribution);
-    const endDate = new Date(today);
-
-    // Reset stats for iteration
-    stats.currentStreak.length = 0;
-    stats.longestStreak.length = 0;
-
-    let currentStreakStart = "";
-    let currentStreakLength = 0;
-
-    for (
-      let d = new Date(startDate);
-      d <= endDate;
-      d.setDate(d.getDate() + 1)
-    ) {
-      const dateStr = d.toISOString().split("T")[0];
-      const count = contributions[dateStr] || 0;
-      stats.totalContributions += count; // This might double count if we iterate over dates array, but here we iterate over calendar days.
-      // Wait, totalContributions should be sum of all counts. The loop above iterates all days.
-      // But contributions object only has days with data? No, GraphQL returns all days in calendar.
-      // Actually, my contributions object construction:
-      // contributions[day.date] = day.contributionCount;
-      // This includes 0 counts if GraphQL returns them. GraphQL usually returns all days in the requested range.
-
-      // However, to be safe and handle gaps properly (if any), iterating by date is better.
-      // But wait, `stats.totalContributions` was already calculated? No, I initialized it to 0.
-      // But I am iterating `dates` (which are keys of `contributions`) in the previous logic.
-      // Let's rewrite the loop to be robust.
-    }
-
-    // Re-calculating total contributions and streaks
-    stats.totalContributions = 0;
-
-    let tempStreakLength = 0;
-    let tempStreakStart = "";
-    let tempStreakEnd = "";
-
-    for (
-      let d = new Date(startDate);
-      d <= endDate;
-      d.setDate(d.getDate() + 1)
-    ) {
-      const dateStr = d.toISOString().split("T")[0];
-      const count = contributions[dateStr] || 0;
-      stats.totalContributions += count;
-
-      if (count > 0 || (tempStreakLength > 0 && isExcluded(dateStr))) {
-        tempStreakLength++;
-        tempStreakEnd = dateStr;
-        if (tempStreakLength === 1) {
-          tempStreakStart = dateStr;
-        }
-      } else {
-        if (tempStreakLength > stats.longestStreak.length) {
-          stats.longestStreak.start = tempStreakStart;
-          stats.longestStreak.end = tempStreakEnd;
-          stats.longestStreak.length = tempStreakLength;
-        }
-        tempStreakLength = 0;
-      }
-    }
-
-    // Check last streak
-    if (tempStreakLength > stats.longestStreak.length) {
-      stats.longestStreak.start = tempStreakStart;
-      stats.longestStreak.end = tempStreakEnd;
-      stats.longestStreak.length = tempStreakLength;
-    }
-
-    // Current streak is the streak ending today (or yesterday if today has no contribs yet?)
-    // The PHP logic says:
-    // "reset streak but give exception for today"
-    // "if ($date != $today)" reset.
-
-    // Let's re-implement the PHP logic exactly using the sorted dates array from `contributions`
-    // But `contributions` might have gaps if I only populated it from GraphQL results and GraphQL results had gaps (unlikely for Calendar).
-    // But `contributions` keys are from `contributionDays`.
-
-    // Let's stick to the PHP logic translation which iterates over `contributions` map.
-    // But I need to ensure `contributions` has entries for ALL days.
-    // The GraphQL `contributionCalendar` returns all days.
-
-    // So iterating `dates` (keys of `contributions`) is safe assuming GraphQL returns contiguous days.
-
-    stats.totalContributions = 0;
-    stats.currentStreak.length = 0;
-    stats.longestStreak.length = 0;
 
     dates.forEach((date) => {
       const count = contributions[date];
