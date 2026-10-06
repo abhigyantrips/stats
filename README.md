@@ -66,29 +66,29 @@ This is a subset of the upstream projects' options, not a drop-in replacement.
 31 calendar days, including today in UTC, using GitHub's contribution calendar
 (all contribution types, not only commits). It supports these query parameters:
 
-| Parameter            | Default                            | Description                                                               |
-| -------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
-| `days`               | `31`                               | Integer from 1 to 90; number of days to display.                          |
-| `from`               | Computed                           | Inclusive starting date, `YYYY-MM-DD`.                                    |
-| `to`                 | Today (UTC)                        | Inclusive ending date, `YYYY-MM-DD`.                                      |
-| `theme`              | `default`                          | An existing project theme (listed below).                                 |
-| `bg_color`           | Theme background                   | Background color.                                                         |
-| `border_color`       | Theme border                       | Border color.                                                             |
-| `color`              | Theme text                         | Axis and tick label color; `text_color` is an alias and takes precedence. |
-| `title_color`        | Theme title                        | Title color.                                                              |
-| `line`               | Theme graph line                   | Contribution line color.                                                  |
-| `point`              | Theme graph point                  | Daily point color.                                                        |
-| `area`               | `false`                            | Set to `true` to fill beneath the line at 20% opacity.                    |
-| `area_color`         | Line color                         | Area fill color; requires `area=true`.                                    |
-| `hide_border`        | `false`                            | Set to `true` to hide the border.                                         |
-| `hide_title`         | `false`                            | Set to `true` to hide the visible title.                                  |
-| `custom_title`       | `USERNAME's GitHub Activity Graph` | Custom title; URL-encode spaces and special characters.                   |
-| `radius`             | `4.5`                              | Border radius from 0 to 16; fractional values are allowed.                |
-| `border_radius`      | `4.5`                              | Alias for `radius`; takes precedence when both are supplied.              |
-| `height`             | `300`                              | Integer from 200 to 600, in pixels.                                       |
-| `card_width`         | `1000`                             | Integer from 300 to 2000, in pixels.                                      |
-| `grid`               | `true`                             | Set to `false` to hide the horizontal grid lines.                         |
-| `disable_animations` | `false`                            | Set to `true` to disable the title fade-in.                               |
+| Parameter            | Default                         | Description                                                               |
+| -------------------- | ------------------------------- | ------------------------------------------------------------------------- |
+| `days`               | `31`                            | Integer from 1 to 90; number of days to display.                          |
+| `from`               | Computed                        | Inclusive starting date, `YYYY-MM-DD`.                                    |
+| `to`                 | Today (UTC)                     | Inclusive ending date, `YYYY-MM-DD`.                                      |
+| `theme`              | `default`                       | An existing project theme (listed below).                                 |
+| `bg_color`           | Theme background                | Background color.                                                         |
+| `border_color`       | Theme border                    | Border color.                                                             |
+| `color`              | Theme text                      | Axis and tick label color; `text_color` is an alias and takes precedence. |
+| `title_color`        | Graph text color                | Title color; defaults to the graph text color.                            |
+| `line`               | Theme graph line                | Contribution line color.                                                  |
+| `point`              | Theme graph point               | Daily point color.                                                        |
+| `area`               | `false`                         | Set to `true` to fill beneath the line at 10% opacity.                    |
+| `area_color`         | Line color                      | Area fill color; requires `area=true`.                                    |
+| `hide_border`        | `false`                         | Set to `true` to hide the border.                                         |
+| `hide_title`         | `false`                         | Set to `true` to hide the visible title.                                  |
+| `custom_title`       | `USERNAME's Contribution Graph` | Custom title; URL-encode spaces and special characters.                   |
+| `radius`             | `0`                             | Border radius from 0 to 16; fractional values are allowed.                |
+| `border_radius`      | `0`                             | Alias for `radius`; takes precedence when both are supplied.              |
+| `height`             | `420`                           | Integer from 200 to 600, in pixels.                                       |
+| `card_width`         | `1200`                          | Integer from 300 to 2000, in pixels.                                      |
+| `grid`               | `true`                          | Set to `false` to hide the horizontal and vertical grid lines.            |
+| `disable_animations` | `false`                         | Set to `true` to disable the line draw and point entrance animations.     |
 
 Colors are hexadecimal without `#` (3, 4, 6, or 8 digits); invalid colors fall
 back to the theme. Available themes: `default`, `dark`, `radical`, `merko`,
@@ -102,6 +102,14 @@ range determines the number of points and overrides `days` (if supplied,
 `days` must still be valid). Every range is inclusive, limited to 90 days, and
 cannot extend into the future. Invalid dates, ranges, or numeric options return
 HTTP 400 before contacting GitHub.
+
+The graph follows the reference layout: a centered 20px title, a smooth 4px
+line, 10px points, and plot padding of 80px at the top, 90px on the left,
+50px on the right, and 70px at the bottom (including axis labels). Hiding the
+title preserves the plot position. The X axis shows day-of-month labels; point
+titles include the full date and contribution count. The line draws over five
+seconds and points enter over one second. Both animations respect reduced-motion
+preferences and can be disabled with `disable_animations=true`.
 
 Examples:
 
@@ -154,6 +162,11 @@ pnpm exec wrangler deploy --dry-run
 
 - [Anurag Hazra's GitHub README Stats](https://github.com/anuraghazra/github-readme-stats): stats design, commit-count approach, and rank calculation.
 - [DenverCoder1's GitHub Streak Stats](https://github.com/DenverCoder1/github-readme-streak-stats): streak design and behavior.
-- [GitHub README Activity Graph](https://github.com/Ashutosh00710/github-readme-activity-graph): inspiration for the activity graph and its customization options.
+- [Ashutosh Dwivedi's GitHub README Activity Graph](https://github.com/Ashutosh00710/github-readme-activity-graph): graph layout, animations, and customization options.
+- [Gion Kunz's Chartist](https://github.com/gionkunz/chartist-js): curve-smoothing algorithm.
 
 The rank calculation's upstream license is included in [calculate-rank.ts](src/lib/calculate-rank.ts).
+The graph layout and animations are adapted from GitHub README Activity Graph;
+its MIT license is included in [graph.tsx](src/templates/github/graph.tsx).
+The curve-smoothing algorithm is adapted from Chartist 0.11.4; its MIT license
+is included in [graph-path.ts](src/lib/graph-path.ts).

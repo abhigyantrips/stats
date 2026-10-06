@@ -120,6 +120,39 @@ describe("activity date ranges", () => {
 });
 
 describe("activity graph endpoint", () => {
+  it("uses the reference canvas, centered title, padding, and text color", async () => {
+    const svg = await (await request()).text();
+    expect(svg).toContain('width="1200" height="420"');
+    expect(svg).toContain('rx="0"');
+    expect(svg).toMatch(
+      /data-testid="card-title" x="600" y="38" text-anchor="middle"/,
+    );
+    expect(svg).toContain("600 20px");
+    expect(svg).toContain("fill: #434d58");
+    expect(svg).not.toContain("fill: #2f80ed");
+    expect(svg).toContain('x1="90" x2="1150"');
+    expect(svg).toContain('y1="80" y2="350"');
+    expect(svg).toContain('stroke-width="4"');
+    expect(svg).toContain('r="5"');
+    expect(svg).not.toContain(">12-16</text>");
+  });
+  it("inherits the title color from color unless title_color overrides it", async () => {
+    const inherited = await (await request("color=228822")).text();
+    expect(inherited).toMatch(/\.header[^}]+fill: #228822/);
+    const overridden = await (
+      await request("color=228822&title_color=aa1122")
+    ).text();
+    expect(overridden).toMatch(/\.header[^}]+fill: #aa1122/);
+    expect(overridden).toMatch(/\.graph-label[^}]+fill: #228822/);
+  });
+  it("draws a smooth curve and animates the line and points by default", async () => {
+    const svg = await (await request("days=3")).text();
+    expect(svg).toMatch(/data-testid="graph-line"[^>]+d="M[^"]+ C/);
+    expect(svg).toContain("animation: dash 5s ease-in-out forwards");
+    expect(svg).toContain("animation: blink 1s ease-in-out forwards");
+    expect(svg).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(svg).toContain("stroke-dashoffset: 0");
+  });
   it("serves a chronological SVG with the requested GitHub time boundaries", async () => {
     const response = await request("from=2025-12-31&to=2026-01-02");
     expect(response.status).toBe(200);
@@ -130,7 +163,8 @@ describe("activity graph endpoint", () => {
     expect(svg.indexOf("2025-12-31: 2")).toBeLessThan(
       svg.indexOf("2026-01-02: 0"),
     );
-    expect(svg).toContain("Date (UTC)");
+    expect(svg).toContain(">Days</text>");
+    expect(svg).toContain("Dates use UTC");
     expect(svg).not.toContain('data-testid="graph-area"');
     const { variables } = JSON.parse(upstream.mock.calls[0][1]!.body as string);
     expect(variables).toEqual({
@@ -154,8 +188,9 @@ describe("activity graph endpoint", () => {
     expect(svg).toMatch(/data-testid="graph-line"[^>]+stroke="#555555"/);
     expect(svg).toMatch(/data-testid="graph-point"[^>]+fill="#666666"/);
     expect(svg).toMatch(/data-testid="graph-area"[^>]+fill="#777777"/);
-    expect(svg).not.toContain('stroke-dasharray="3 4"');
-    expect(svg).toContain("animation: none");
+    expect(svg).not.toContain('stroke-dasharray="2"');
+    expect(svg).not.toContain("animation:");
+    expect(svg).not.toContain("stroke-dashoffset:");
   });
   it("uses existing theme graph colors and falls back on invalid overrides", async () => {
     const svg = await (
@@ -167,7 +202,7 @@ describe("activity graph endpoint", () => {
     expect(svg).toContain('stroke="#fb8c00"');
     expect(svg).toMatch(/data-testid="graph-area"[^>]+fill="#fb8c00"/);
     expect(svg).toContain("fill: #fefefe");
-    expect(svg).toContain('stroke-dasharray="3 4"');
+    expect(svg).toContain('stroke-dasharray="2"');
   });
   for (const theme of ["unknown", "constructor", "__proto__"]) {
     it(`falls back to the default for an unknown theme: ${theme}`, async () => {
@@ -197,7 +232,7 @@ describe("activity graph endpoint", () => {
     const svg = await (await request("days=1&area=true")).text();
     expect(svg).not.toMatch(/NaN|Infinity|undefined/);
     expect(svg.match(/data-testid="graph-point"/g)).toHaveLength(1);
-    expect(svg).toContain('cx="517.5"');
+    expect(svg).toContain('cx="620"');
     expect(svg).toContain("0 contributions from 2026-01-15 to 2026-01-15");
   });
   for (const parameter of ["user", "username"]) {

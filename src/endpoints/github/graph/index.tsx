@@ -27,11 +27,11 @@ app.get("/", async (c) => {
   try {
     range = getActivityRange(query);
     options = {
-      width: graphNumber(query.card_width, 1000, 300, 2000, "card_width"),
-      height: graphNumber(query.height, 300, 200, 600, "height"),
+      width: graphNumber(query.card_width, 1200, 300, 2000, "card_width"),
+      height: graphNumber(query.height, 420, 200, 600, "height"),
       radius: graphNumber(
         query.border_radius ?? query.radius,
-        4.5,
+        0,
         0,
         16,
         "border_radius",
@@ -39,7 +39,7 @@ app.get("/", async (c) => {
       ),
       hideTitle: query.hide_title === "true",
       hideBorder: query.hide_border === "true",
-      title: query.custom_title ?? `${username}'s GitHub Activity Graph`,
+      title: query.custom_title ?? `${username}'s Contribution Graph`,
       area: query.area === "true",
       grid: query.grid !== "false",
       disableAnimations: query.disable_animations === "true",
@@ -55,10 +55,14 @@ app.get("/", async (c) => {
     ? themes[query.theme]
     : themes.default;
   const defaults = getCardColors({ theme: theme.name });
+  const textColor = graphColor(
+    query.text_color ?? query.color,
+    defaults.textColor,
+  );
   const colors = {
     ...defaults,
-    titleColor: graphColor(query.title_color, defaults.titleColor),
-    textColor: graphColor(query.text_color ?? query.color, defaults.textColor),
+    titleColor: graphColor(query.title_color, textColor),
+    textColor,
     bgColor: graphColor(query.bg_color, theme.backgroundColor),
     borderColor: graphColor(query.border_color, defaults.borderColor),
   };
