@@ -267,7 +267,11 @@ export const GitHubStats: FC<GitHubStatsProps> = ({
   let width = card_width || minCardWidth;
   if (width < minCardWidth) width = minCardWidth;
 
-  const height = 195;
+  // Preserve the default card size, but leave room for every optional row.
+  const height = Math.max(
+    195,
+    statItems.length * lheight + (hide_title ? 50 : 70),
+  );
 
   const progress = 100 - stats.rank.percentile;
   const paddingX = 25;
@@ -369,7 +373,7 @@ export const GitHubStats: FC<GitHubStatsProps> = ({
           rank={stats.rank}
           ringColor={ringColor}
           xTranslation={calculateRankXTranslation()}
-          yTranslation={height / 2 - 8 - paddingY}
+          yTranslation={height / 2 - 8 - paddingY - (hide_title ? 0 : 20)}
           rankIconType={rank_icon}
         />
       )}
