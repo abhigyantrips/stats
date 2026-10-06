@@ -1,19 +1,25 @@
 import { fetchGitHubStreakStats } from "@/lib/github-fetcher";
 import { GitHubStreak } from "@/templates/github/streak";
 import { renderToString } from "hono/jsx/dom/server";
+import type { Bindings } from "@/types/bindings";
 import { getCardColors } from "@/themes";
-import { Context, Hono } from "hono";
-
-type Bindings = {
-  GITHUB_PAT: string;
-  GITHUB_USERNAME: string;
-};
+import { Hono } from "hono";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-app.get("/", async (c: Context) => {
-  const username = c.req.query("user") || c.env.GITHUB_USERNAME;
+app.get("/", async (c) => {
+  const username = c.env.GITHUB_USERNAME;
   const githubToken = c.env.GITHUB_PAT;
+
+  if (!username || !/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(username)) {
+    return c.text("Configure a valid GITHUB_USERNAME", 500);
+  }
+  for (const parameter of ["user", "username"]) {
+    const requested = c.req.query(parameter);
+    if (requested && requested.toLowerCase() !== username.toLowerCase()) {
+      return c.text("This Worker only serves its configured GitHub user", 400);
+    }
+  }
 
   // Get query parameters
   const theme = c.req.query("theme") || "default";
@@ -25,16 +31,13 @@ app.get("/", async (c: Context) => {
     return c.text("GitHub token not configured", 500);
   }
 
-  if (!username) {
-    return c.text("Username not provided", 400);
-  }
-
   try {
     // Fetch stats
     const stats = await fetchGitHubStreakStats(
       username,
       githubToken,
       excludeDays,
+      { origin: new URL(c.req.url).origin },
     );
 
     // Get colors
@@ -66,7 +69,7 @@ app.get("/", async (c: Context) => {
       {
         headers: {
           "Content-Type": "image/svg+xml",
-          "Cache-Control": "s-maxage=3600, stale-while-revalidate",
+          "Cache-Control": "public, max-age=1800",
         },
       },
     );

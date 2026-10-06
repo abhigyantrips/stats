@@ -1,12 +1,8 @@
+import type { Bindings } from "@/types/bindings";
 import streak from "@/endpoints/github/streak";
 import stats from "@/endpoints/github/stats";
 import ping from "@/endpoints/ping";
 import { Hono } from "hono";
-
-type Bindings = {
-  GITHUB_PAT: string;
-  GITHUB_USERNAME: string;
-};
 
 const app = new Hono<{ Bindings: Bindings }>();
 
