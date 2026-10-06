@@ -105,4 +105,4 @@ pnpm exec wrangler deploy --dry-run
 - [DenverCoder1's GitHub Streak Stats](https://github.com/DenverCoder1/github-readme-streak-stats): streak design and behavior.
 - [GitHub README Activity Graph](https://github.com/Ashutosh00710/github-readme-activity-graph): inspiration for the planned graph.
 
-See `THIRD_PARTY_NOTICES` for the rank calculation's upstream license.
+The rank calculation's upstream license is included in [calculate-rank.ts](src/lib/calculate-rank.ts).
